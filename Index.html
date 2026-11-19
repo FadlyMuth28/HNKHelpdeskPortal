@@ -1,0 +1,1387 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>Rekap Kunjungan & Pengkinian Data</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    html, body {
+      max-width: 100%;
+      overflow-x: hidden;
+      -webkit-tap-highlight-color: transparent;
+    }
+  </style>
+</head>
+<body class="bg-slate-100 text-slate-800 min-h-screen font-sans pb-24 md:pb-8">
+
+  <!-- Navbar Ringkas -->
+  <header class="bg-slate-900 text-white shadow-md sticky top-0 z-30">
+    <div class="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between gap-2">
+      <div class="min-w-0">
+        <h1 class="text-base sm:text-lg font-bold tracking-tight truncate">Rekap Pemilik Unit</h1>
+        <p class="text-[11px] text-slate-300 truncate">Kunjungan & Pengkinian Data</p>
+      </div>
+      <div class="flex items-center gap-2 shrink-0">
+        <button onclick="openModal('modalBatch')" class="bg-slate-700 active:bg-slate-600 hover:bg-slate-600 text-white text-xs sm:text-sm font-medium px-3 py-2 rounded-lg transition">
+          + Batch
+        </button>
+        <button onclick="openInputModal()" class="hidden md:inline-flex bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold px-4 py-2 rounded-lg shadow transition">
+          + Input Data Baru
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <main class="max-w-6xl mx-auto px-3 sm:px-4 pt-4 space-y-4">
+
+    <!-- Banner Notifikasi Kemiripan / Penyimpanan -->
+    <div id="globalNotification" class="hidden p-3.5 rounded-xl border shadow-sm flex items-start justify-between gap-3">
+      <div id="globalNotificationBody" class="text-xs sm:text-sm space-y-1"></div>
+      <button onclick="hideGlobalNotification()" class="text-slate-500 hover:text-slate-800 text-lg leading-none font-bold px-1">&times;</button>
+    </div>
+
+    <!-- Ringkasan Statistik 2x2 -->
+    <section class="grid grid-cols-2 md:grid-cols-4 gap-2.5 sm:gap-4">
+      <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+        <p class="text-[11px] font-semibold text-slate-500 uppercase">Orang Unik</p>
+        <p id="statUniquePersons" class="text-xl sm:text-2xl font-bold text-slate-900 mt-0.5">-</p>
+        <p id="statTotalRowsSub" class="text-[10px] text-slate-400 mt-0.5">dari - baris data</p>
+      </div>
+      <div class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm">
+        <p class="text-[11px] font-semibold text-slate-500 uppercase">Total Unit</p>
+        <p id="statTotalUnit" class="text-xl sm:text-2xl font-bold text-slate-900 mt-0.5">-</p>
+        <p class="text-[10px] text-slate-400 mt-0.5">seluruh batch</p>
+      </div>
+      <div class="bg-amber-50 p-3.5 rounded-xl border border-amber-300 shadow-sm">
+        <p class="text-[11px] font-bold text-amber-800 uppercase">Baru (Sel J6)</p>
+        <p id="statTotalBaru" class="text-xl sm:text-2xl font-bold text-amber-700 mt-0.5">-</p>
+        <p class="text-[10px] text-amber-700/80 mt-0.5">pengkinian data</p>
+      </div>
+      <div class="bg-purple-50 p-3.5 rounded-xl border border-purple-200 shadow-sm">
+        <p class="text-[11px] font-bold text-purple-800 uppercase">Datang &gt;1x</p>
+        <p id="statTotalRepeat" class="text-xl sm:text-2xl font-bold text-purple-700 mt-0.5">-</p>
+        <p class="text-[10px] text-purple-700/80 mt-0.5">1 orang = terhitung 1</p>
+      </div>
+    </section>
+
+    <!-- Pencarian & Filter -->
+    <section class="bg-white p-3.5 rounded-xl border border-slate-200 shadow-sm space-y-2.5">
+      <div>
+        <input id="searchInput" type="search" oninput="renderTable()" placeholder="Cari nama pemilik, unit, atau no. telp..." class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-base sm:text-sm focus:outline-none focus:ring-2 focus:ring-emerald-500" />
+      </div>
+      <div class="grid grid-cols-2 gap-2.5">
+        <select id="filterBatch" onchange="renderTable()" class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-base sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <option value="ALL">Semua Batch</option>
+        </select>
+        <select id="filterStatus" onchange="renderTable()" class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-base sm:text-sm bg-white focus:outline-none focus:ring-2 focus:ring-emerald-500">
+          <option value="ALL">Semua Status &amp; Kunjungan</option>
+          <option value="REPEAT">Datang &gt;1x (Kombinasi Data)</option>
+          <option value="BARU">Baru (Kuning)</option>
+          <option value="LAMA">Data Lama</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- Info Jumlah & Refresh -->
+    <div class="px-1 flex items-center justify-between">
+      <span id="tableCountInfo" class="text-xs font-medium text-slate-500">Memuat data...</span>
+      <button onclick="loadData()" class="text-xs font-semibold text-emerald-700 active:opacity-70">Muat Ulang</button>
+    </div>
+
+    <!-- TAMPILAN HP: Daftar Kartu -->
+    <section id="mobileList" class="md:hidden space-y-3">
+      <div class="bg-white p-6 rounded-xl border border-slate-200 text-center text-sm text-slate-400">
+        Mengambil data dari spreadsheet...
+      </div>
+    </section>
+
+    <!-- TAMPILAN LAPTOP/DESKTOP: Tabel Lengkap -->
+    <section class="hidden md:block bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
+      <div class="overflow-x-auto">
+        <table class="w-full text-left border-collapse text-sm">
+          <thead>
+            <tr class="bg-slate-100 text-slate-600 text-xs uppercase border-b border-slate-200">
+              <th class="py-3 px-4">Batch</th>
+              <th class="py-3 px-3">No</th>
+              <th class="py-3 px-4">Nama Pihak Ketiga</th>
+              <th class="py-3 px-4">Unit</th>
+              <th class="py-3 px-3 text-center">Jml</th>
+              <th class="py-3 px-4">Tggl Kunjungan</th>
+              <th class="py-3 px-4">Skema Investor</th>
+              <th class="py-3 px-4">Status</th>
+              <th class="py-3 px-4 text-right">Aksi</th>
+            </tr>
+          </thead>
+          <tbody id="tableBody" class="divide-y divide-slate-200">
+            <tr>
+              <td colspan="9" class="py-8 text-center text-slate-400">Sedang mengambil data dari spreadsheet...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <!-- Tombol Melayang Khusus HP -->
+  <div class="fixed bottom-4 inset-x-4 z-30 md:hidden">
+    <button onclick="openInputModal()" class="w-full bg-emerald-600 active:bg-emerald-700 text-white font-bold text-base py-3.5 rounded-2xl shadow-lg flex items-center justify-center gap-2">
+      <span>+ Input Data Pihak Ketiga</span>
+    </button>
+  </div>
+
+  <!-- MODAL 1: INPUT DATA BARU -->
+  <div id="modalInput" class="hidden fixed inset-0 bg-slate-900/60 z-40 flex items-end sm:items-center justify-center sm:p-4">
+    <div class="bg-white w-full h-[94dvh] sm:h-auto sm:max-h-[90vh] sm:max-w-2xl rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col overflow-hidden">
+      <div class="px-5 py-3.5 bg-slate-900 text-white flex justify-between items-center shrink-0">
+        <h2 class="font-bold text-base">Input Data Pihak Ketiga</h2>
+        <button onclick="closeModal('modalInput')" class="text-slate-300 hover:text-white text-2xl leading-none px-1">&times;</button>
+      </div>
+
+      <form id="formInput" onsubmit="submitInputForm(event)" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Pilih Batch (Sheet) *</label>
+            <select id="inBatch" required class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-base sm:text-sm bg-white"></select>
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Penanda Status Data *</label>
+            <select id="inIsBaru" class="w-full px-3 py-2.5 border border-amber-400 bg-amber-50 rounded-xl text-base sm:text-sm font-semibold text-amber-900">
+              <option value="true">Baru (Pengkinian Data - Kuning)</option>
+              <option value="false">Lama (Data Eksisting)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Pihak Ketiga *</label>
+            <input id="inNama" type="text" required oninput="checkSimilarityLive('in')" placeholder="Contoh: Budi Santoso" class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-base sm:text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Nomor Telp</label>
+            <input id="inTelp" type="tel" oninput="checkSimilarityLive('in')" placeholder="Contoh: 08123456789" class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-base sm:text-sm" />
+          </div>
+        </div>
+
+        <!-- Blok Unit & Generator Rentang Cepat (Untuk 100+ Unit) -->
+        <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <label class="text-xs font-bold text-slate-800">Unit &amp; Nomor Unit (Bisa Copy-Paste banyak baris)</label>
+            <div class="flex items-center gap-2">
+              <span id="inDetectedUnitBadge" class="hidden text-[11px] font-bold px-2 py-0.5 rounded bg-emerald-100 text-emerald-800"></span>
+              <button type="button" onclick="toggleRangeHelper('in')" class="text-xs font-bold text-emerald-700 hover:underline">
+                + Generate Rentang Unit
+              </button>
+            </div>
+          </div>
+
+          <!-- Panel Bantu Generate Rentang Unit (misal GA-9 No. 1 s/d 100) -->
+          <div id="inRangeHelper" class="hidden p-3 rounded-xl bg-white border border-emerald-300 space-y-2">
+            <p class="text-[11px] font-semibold text-emerald-900">Isi otomatis nomor unit berurutan (contoh: Blok GA-9, No. 1 s/d 100):</p>
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <label class="block text-[10px] font-semibold text-slate-600 mb-0.5">Blok / Tower</label>
+                <input id="inRangeBlock" type="text" placeholder="GA-9" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm" />
+              </div>
+              <div>
+                <label class="block text-[10px] font-semibold text-slate-600 mb-0.5">Dari No.</label>
+                <input id="inRangeStart" type="number" inputmode="numeric" min="1" placeholder="1" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm" />
+              </div>
+              <div>
+                <label class="block text-[10px] font-semibold text-slate-600 mb-0.5">Sampai No.</label>
+                <input id="inRangeEnd" type="number" inputmode="numeric" min="1" placeholder="100" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm" />
+              </div>
+            </div>
+            <div class="flex items-center justify-end gap-2 pt-1">
+              <button type="button" onclick="clearUnitText('in')" class="px-2.5 py-1 text-xs font-semibold text-slate-600 bg-slate-100 rounded-lg">Kosongkan</button>
+              <button type="button" onclick="generateUnitRange('in')" class="px-3 py-1.5 text-xs font-bold bg-emerald-600 text-white rounded-lg active:bg-emerald-700">Tambahkan ke Daftar</button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2.5 items-start">
+            <div class="col-span-2">
+              <textarea id="inUnit" rows="2" oninput="handleUnitInput('in')" placeholder="Ketik atau paste daftar unit dari Excel/WA (pisahkan enter atau koma)..." class="w-full px-3 py-2 border border-slate-300 rounded-xl text-base sm:text-sm bg-white"></textarea>
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-600 mb-1">Jml Unit (Otomatis)</label>
+              <input id="inJumlahUnit" type="number" inputmode="numeric" min="1" placeholder="1" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-base sm:text-sm font-bold text-slate-900 bg-white" />
+            </div>
+          </div>
+
+          <!-- Opsi Cara Simpan jika lebih dari 1 unit -->
+          <div id="inSplitOptionBox" class="hidden pt-1.5 border-t border-slate-200">
+            <label class="flex items-start gap-2 cursor-pointer text-xs text-slate-700">
+              <input id="inSplitPerUnit" type="checkbox" class="mt-0.5 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500" />
+              <span>
+                <strong>Pecah menjadi baris terpisah di Sheet (1 baris = 1 unit)</strong><br/>
+                <span class="text-[11px] text-slate-500">Centang jika tiap unit punya status dokumen/IPL berbeda. Biarkan kosong jika cukup digabung 1 baris.</span>
+              </span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Notifikasi Kemiripan Real-time -->
+        <div id="inSimilarityAlert" class="hidden p-3.5 rounded-xl border text-xs space-y-2"></div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="block text-xs font-semibold text-slate-700">Tggl Kunjungan/Menghubungi</label>
+              <button type="button" onclick="setTanggalHariIni('inTanggal')" class="text-xs font-bold text-emerald-700">
+                Hari Ini
+              </button>
+            </div>
+            <input id="inTanggal" type="date" class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-base sm:text-sm bg-white" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Skema Investor</label>
+            <input id="inSkema" list="listSkema" placeholder="Pilih atau ketik..." class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-base sm:text-sm" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Status Kelengkapan Data</label>
+            <input id="inStatusData" list="listStatusData" placeholder="Lengkap / Pending" class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-base sm:text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Jenis Kunjungan</label>
+            <input id="inJenisKunjungan" list="listJenis" placeholder="Datang Langsung / WA" class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-base sm:text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Dokumen Kepemilikan</label>
+            <input id="inDokumen" list="listDokumen" placeholder="SHMSRS / PPJB" class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-base sm:text-sm" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Isu / Syarat</label>
+          <input id="inIsu" type="text" placeholder="Contoh: 2x, 200%, IPL Hapus, Pending..." class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-base sm:text-sm" />
+        </div>
+
+        <div class="pt-2 pb-4 flex gap-2.5">
+          <button type="button" onclick="closeModal('modalInput')" class="w-1/3 py-3 text-sm font-semibold text-slate-600 bg-slate-100 rounded-xl">Batal</button>
+          <button type="submit" class="w-2/3 py-3 text-sm font-bold bg-emerald-600 active:bg-emerald-700 text-white rounded-xl shadow">Simpan Data</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 2: EDIT DATA EXISTING -->
+  <div id="modalEdit" class="hidden fixed inset-0 bg-slate-900/60 z-50 flex items-end sm:items-center justify-center sm:p-4">
+    <div class="bg-white w-full h-[94dvh] sm:h-auto sm:max-h-[90vh] sm:max-w-2xl rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col overflow-hidden">
+      <div class="px-5 py-3.5 bg-blue-900 text-white flex justify-between items-center shrink-0">
+        <div>
+          <h2 class="font-bold text-base">Edit Data Pihak Ketiga</h2>
+          <p id="editSubtitle" class="text-[11px] text-blue-200"></p>
+        </div>
+        <button onclick="closeModal('modalEdit')" class="text-blue-200 hover:text-white text-2xl leading-none px-1">&times;</button>
+      </div>
+
+      <form id="formEdit" onsubmit="submitEditForm(event)" class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+        <input type="hidden" id="editBatch" />
+        <input type="hidden" id="editRowNumber" />
+        <input type="hidden" id="editRecordId" />
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Batch / Baris Sheet</label>
+            <input id="editLocationDisplay" type="text" disabled class="w-full px-3 py-2.5 border border-slate-200 bg-slate-100 text-slate-600 rounded-xl text-base sm:text-sm font-medium" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Penanda Status Data *</label>
+            <select id="editIsBaru" class="w-full px-3 py-2.5 border border-amber-400 bg-amber-50 rounded-xl text-base sm:text-sm font-semibold text-amber-900">
+              <option value="true">Baru (Pengkinian Data - Kuning)</option>
+              <option value="false">Lama (Data Eksisting)</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Pihak Ketiga *</label>
+            <input id="editNama" type="text" required oninput="checkSimilarityLive('edit')" class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-base sm:text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Nomor Telp</label>
+            <input id="editTelp" type="tel" oninput="checkSimilarityLive('edit')" class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-base sm:text-sm" />
+          </div>
+        </div>
+
+        <!-- Blok Unit & Generator Rentang Cepat pada Edit -->
+        <div class="p-3.5 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <label class="text-xs font-bold text-slate-800">Unit &amp; Nomor Unit</label>
+            <div class="flex items-center gap-2">
+              <span id="editDetectedUnitBadge" class="hidden text-[11px] font-bold px-2 py-0.5 rounded bg-blue-100 text-blue-800"></span>
+              <button type="button" onclick="toggleRangeHelper('edit')" class="text-xs font-bold text-blue-700 hover:underline">
+                + Generate Rentang Unit
+              </button>
+            </div>
+          </div>
+
+          <div id="editRangeHelper" class="hidden p-3 rounded-xl bg-white border border-blue-300 space-y-2">
+            <p class="text-[11px] font-semibold text-blue-900">Tambah rentang unit berurutan:</p>
+            <div class="grid grid-cols-3 gap-2">
+              <div>
+                <label class="block text-[10px] font-semibold text-slate-600 mb-0.5">Blok / Tower</label>
+                <input id="editRangeBlock" type="text" placeholder="GA-9" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm" />
+              </div>
+              <div>
+                <label class="block text-[10px] font-semibold text-slate-600 mb-0.5">Dari No.</label>
+                <input id="editRangeStart" type="number" inputmode="numeric" min="1" placeholder="1" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm" />
+              </div>
+              <div>
+                <label class="block text-[10px] font-semibold text-slate-600 mb-0.5">Sampai No.</label>
+                <input id="editRangeEnd" type="number" inputmode="numeric" min="1" placeholder="100" class="w-full px-2.5 py-1.5 border border-slate-300 rounded-lg text-sm" />
+              </div>
+            </div>
+            <div class="flex items-center justify-end gap-2 pt-1">
+              <button type="button" onclick="clearUnitText('edit')" class="px-2.5 py-1 text-xs font-semibold text-slate-600 bg-slate-100 rounded-lg">Kosongkan</button>
+              <button type="button" onclick="generateUnitRange('edit')" class="px-3 py-1.5 text-xs font-bold bg-blue-700 text-white rounded-lg active:bg-blue-800">Tambahkan ke Daftar</button>
+            </div>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2.5 items-start">
+            <div class="col-span-2">
+              <textarea id="editUnit" rows="2" oninput="handleUnitInput('edit')" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-base sm:text-sm bg-white"></textarea>
+            </div>
+            <div>
+              <label class="block text-[11px] font-semibold text-slate-600 mb-1">Jml Unit</label>
+              <input id="editJumlahUnit" type="number" inputmode="numeric" min="1" class="w-full px-3 py-2 border border-slate-300 rounded-xl text-base sm:text-sm font-bold text-slate-900 bg-white" />
+            </div>
+          </div>
+        </div>
+
+        <!-- Notifikasi Kemiripan Real-time saat Edit -->
+        <div id="editSimilarityAlert" class="hidden p-3.5 rounded-xl border text-xs space-y-2"></div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <label class="block text-xs font-semibold text-slate-700">Tggl Kunjungan/Menghubungi</label>
+              <button type="button" onclick="setTanggalHariIni('editTanggal')" class="text-xs font-bold text-blue-700">
+                Hari Ini
+              </button>
+            </div>
+            <input id="editTanggal" type="date" class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-base sm:text-sm bg-white" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Skema Investor</label>
+            <input id="editSkema" list="listSkema" class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-base sm:text-sm" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Status Kelengkapan Data</label>
+            <input id="editStatusData" list="listStatusData" class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-base sm:text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Jenis Kunjungan</label>
+            <input id="editJenisKunjungan" list="listJenis" class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-base sm:text-sm" />
+          </div>
+          <div>
+            <label class="block text-xs font-semibold text-slate-700 mb-1">Dokumen Kepemilikan</label>
+            <input id="editDokumen" list="listDokumen" class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-base sm:text-sm" />
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Isu / Syarat</label>
+          <input id="editIsu" type="text" class="w-full px-3 py-2.5 border border-slate-300 rounded-xl text-base sm:text-sm" />
+        </div>
+
+        <div class="pt-2 pb-4 flex gap-2.5">
+          <button type="button" onclick="closeModal('modalEdit')" class="w-1/3 py-3 text-sm font-semibold text-slate-600 bg-slate-100 rounded-xl">Batal</button>
+          <button type="submit" class="w-2/3 py-3 text-sm font-bold bg-blue-700 active:bg-blue-800 text-white rounded-xl shadow">Simpan Perubahan</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 3: TAMBAH BATCH BARU -->
+  <div id="modalBatch" class="hidden fixed inset-0 bg-slate-900/60 z-40 flex items-end sm:items-center justify-center sm:p-4">
+    <div class="bg-white w-full sm:max-w-md rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden">
+      <div class="px-5 py-3.5 bg-slate-900 text-white flex justify-between items-center">
+        <h2 class="font-bold text-base">Tambah Batch (Sheet) Baru</h2>
+        <button onclick="closeModal('modalBatch')" class="text-slate-300 hover:text-white text-2xl leading-none">&times;</button>
+      </div>
+      <form onsubmit="submitBatchForm(event)" class="p-5 space-y-4">
+        <div>
+          <label class="block text-xs font-semibold text-slate-700 mb-1">Nama Batch / Tab Sheet Baru *</label>
+          <input id="newBatchName" type="text" required placeholder="Contoh: Batch 4" class="w-full px-3.5 py-2.5 border border-slate-300 rounded-xl text-base sm:text-sm" />
+          <p class="text-xs text-slate-500 mt-1.5">Sheet baru otomatis dibuat dengan format header 11 kolom standar.</p>
+        </div>
+        <div class="flex gap-2.5 pt-1">
+          <button type="button" onclick="closeModal('modalBatch')" class="w-1/3 py-2.5 text-sm font-semibold text-slate-600 bg-slate-100 rounded-xl">Batal</button>
+          <button type="submit" class="w-2/3 py-2.5 text-sm font-bold bg-slate-900 text-white rounded-xl">Buat Sheet</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- MODAL 4: DETAIL LENGKAP PIHAK KETIGA -->
+  <div id="modalDetail" class="hidden fixed inset-0 bg-slate-900/60 z-40 flex items-end sm:items-center justify-center sm:p-4">
+    <div class="bg-white w-full max-h-[92dvh] sm:max-w-xl rounded-t-2xl sm:rounded-2xl shadow-xl flex flex-col overflow-hidden">
+      <div class="px-5 py-3.5 bg-slate-900 text-white flex justify-between items-start gap-2 shrink-0">
+        <div class="min-w-0">
+          <div class="flex flex-wrap items-center gap-1.5">
+            <span id="detBatchBadge" class="text-[11px] uppercase tracking-wider bg-slate-700 px-2 py-0.5 rounded text-slate-200"></span>
+            <span id="detRepeatBadge" class="hidden text-[11px] font-bold bg-purple-600 px-2 py-0.5 rounded text-white"></span>
+          </div>
+          <h2 id="detNama" class="font-bold text-base sm:text-lg mt-1 leading-snug"></h2>
+        </div>
+        <button onclick="closeModal('modalDetail')" class="text-slate-300 hover:text-white text-2xl leading-none px-1">&times;</button>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4">
+        <div id="detStatusBanner" class="p-3.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border"></div>
+
+        <!-- Riwayat Kunjungan Lintas Batch -->
+        <div id="detHistorySection" class="hidden bg-purple-50 border border-purple-200 rounded-xl p-3.5 space-y-2.5">
+          <div>
+            <h3 id="detHistoryTitle" class="text-xs font-bold text-purple-900 uppercase tracking-wide">Riwayat Kunjungan</h3>
+            <p id="detMatchReasonText" class="text-[11px] text-purple-700 mt-0.5"></p>
+          </div>
+          <div id="detHistoryList" class="space-y-2"></div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 text-sm bg-slate-50 p-4 rounded-xl border border-slate-200">
+          <div><span class="text-[11px] text-slate-500 block">Nomor Urut</span><strong id="detNo">-</strong></div>
+          <div><span class="text-[11px] text-slate-500 block">Nomor Telp</span><strong id="detTelp" class="break-all">-</strong></div>
+          <div class="col-span-2">
+            <div class="flex items-center justify-between mb-1">
+              <span class="text-[11px] text-slate-500">Daftar Unit</span>
+              <button type="button" onclick="copyDetailUnits()" class="text-[11px] font-bold text-emerald-700 hover:underline">Salin Daftar Unit</button>
+            </div>
+            <div class="max-h-28 overflow-y-auto bg-white p-2.5 rounded-lg border border-slate-200 text-xs font-semibold text-slate-800 leading-relaxed">
+              <span id="detUnit">-</span>
+            </div>
+          </div>
+          <div><span class="text-[11px] text-slate-500 block">Jumlah Unit</span><strong id="detJumlahUnit">-</strong></div>
+          <div><span class="text-[11px] text-slate-500 block">Tggl Kunjungan</span><strong id="detTanggal">-</strong></div>
+          <div><span class="text-[11px] text-slate-500 block">Skema Investor</span><strong id="detSkema">-</strong></div>
+          <div><span class="text-[11px] text-slate-500 block">Status Data</span><strong id="detStatusData">-</strong></div>
+          <div><span class="text-[11px] text-slate-500 block">Jenis Kunjungan</span><strong id="detJenisKunjungan">-</strong></div>
+          <div><span class="text-[11px] text-slate-500 block">Dokumen</span><strong id="detDokumen">-</strong></div>
+          <div class="col-span-2"><span class="text-[11px] text-slate-500 block">Isu / Syarat</span><strong id="detIsu">-</strong></div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5">
+          <button onclick="closeModal('modalDetail')" class="py-3 text-sm font-semibold bg-slate-200 active:bg-slate-300 text-slate-800 rounded-xl">Tutup</button>
+          <button id="btnDetailEdit" class="py-3 text-sm font-bold bg-blue-700 active:bg-blue-800 text-white rounded-xl shadow">Edit Data Ini</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Shared Datalists -->
+  <datalist id="listSkema">
+    <option value="Setuju">
+    <option value="Setuju dengan syarat">
+    <option value="Tidak setuju">
+    <option value="Pending">
+  </datalist>
+  <datalist id="listStatusData">
+    <option value="Lengkap">
+    <option value="Tidak Lengkap">
+    <option value="Pending">
+  </datalist>
+  <datalist id="listJenis">
+    <option value="Datang Langsung">
+    <option value="Via WA">
+    <option value="Didatangi">
+  </datalist>
+  <datalist id="listDokumen">
+    <option value="SHMSRS">
+    <option value="PPJB">
+    <option value="AJB">
+  </datalist>
+
+  <!-- Loading Overlay -->
+  <div id="loadingOverlay" class="hidden fixed inset-0 bg-slate-900/40 backdrop-blur-[1px] z-50 flex items-center justify-center p-4">
+    <div class="bg-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-xl text-sm font-medium text-center">
+      Menyinkronkan data...
+    </div>
+  </div>
+
+  <script>
+    let appData = { batches: [], records: [], summary: {} };
+    let activeDetailRecord = null;
+
+    window.onload = function() {
+      setTanggalHariIni('inTanggal');
+      loadData();
+    };
+
+    // Memecah input unit (hasil paste Excel/WA atau generator) menjadi daftar satuan & hitung otomatis
+    function parseIndividualUnits(rawText) {
+      const chunks = String(rawText || '')
+        .split(/[\r\n,;]+/)
+        .map(function(s) { return s.trim(); })
+        .filter(function(s) { return s !== ''; });
+
+      const units = [];
+      chunks.forEach(function(chunk) {
+        // Tangani format seperti "GC-7 No. 1 & 6"
+        const multiMatch = chunk.match(/^([A-Za-z0-9\-\.\s]+?\bNo\.?\s*)(\d+(?:\s*(?:&|dan|\/)\s*\d+)+)$/i);
+        if (multiMatch) {
+          const prefix = multiMatch[1].trim();
+          const nums = multiMatch[2].match(/\d+/g) || [];
+          nums.forEach(function(n) {
+            units.push(prefix + ' ' + n);
+          });
+        } else {
+          units.push(chunk);
+        }
+      });
+      return units;
+    }
+
+    function handleUnitInput(prefix) {
+      const unitText = document.getElementById(prefix + 'Unit').value;
+      const units = parseIndividualUnits(unitText);
+      const count = units.length;
+
+      const jmlInput = document.getElementById(prefix + 'JumlahUnit');
+      const badge = document.getElementById(prefix + 'DetectedUnitBadge');
+      const splitBox = document.getElementById('inSplitOptionBox');
+
+      if (count > 0) {
+        jmlInput.value = count;
+        badge.textContent = 'Terdeteksi: ' + count + ' unit';
+        badge.classList.remove('hidden');
+      } else {
+        badge.classList.add('hidden');
+      }
+
+      if (prefix === 'in' && splitBox) {
+        if (count > 1) {
+          splitBox.classList.remove('hidden');
+        } else {
+          splitBox.classList.add('hidden');
+          document.getElementById('inSplitPerUnit').checked = false;
+        }
+      }
+
+      checkSimilarityLive(prefix);
+    }
+
+    function toggleRangeHelper(prefix) {
+      const panel = document.getElementById(prefix + 'RangeHelper');
+      panel.classList.toggle('hidden');
+    }
+
+    function clearUnitText(prefix) {
+      document.getElementById(prefix + 'Unit').value = '';
+      document.getElementById(prefix + 'JumlahUnit').value = '';
+      handleUnitInput(prefix);
+    }
+
+    function generateUnitRange(prefix) {
+      const block = document.getElementById(prefix + 'RangeBlock').value.trim().toUpperCase();
+      const start = Number(document.getElementById(prefix + 'RangeStart').value);
+      const end = Number(document.getElementById(prefix + 'RangeEnd').value);
+
+      if (!block) {
+        alert('Isi Blok / Tower terlebih dahulu (contoh: GA-9).');
+        return;
+      }
+      if (!start || !end || start < 1 || end < start) {
+        alert('Masukkan rentang nomor unit yang valid (Dari No. harus <= Sampai No.).');
+        return;
+      }
+      if (end - start + 1 > 500) {
+        alert('Maksimal 500 unit sekali generate.');
+        return;
+      }
+
+      const generated = [];
+      for (let i = start; i <= end; i++) {
+        generated.push(block + ' No. ' + i);
+      }
+
+      const textarea = document.getElementById(prefix + 'Unit');
+      const existing = textarea.value.trim();
+      textarea.value = existing ? existing + ', ' + generated.join(', ') : generated.join(', ');
+
+      document.getElementById(prefix + 'RangeStart').value = '';
+      document.getElementById(prefix + 'RangeEnd').value = '';
+      handleUnitInput(prefix);
+    }
+
+    function copyDetailUnits() {
+      if (!activeDetailRecord || !activeDetailRecord.unit) return;
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(activeDetailRecord.unit).then(function() {
+          alert('Daftar unit berhasil disalin ke clipboard.');
+        });
+      }
+    }
+
+    function cleanNameTokens(val) {
+      const cleaned = String(val || '')
+        .toLowerCase()
+        .replace(/\b(ir|drs|drg|dr|sh|se|mh|mm|msi|mba|bsc|h|hj|bpk|bapak|ibu|ny|tn|sdr|sdri|pt|cv)\b\.?/g, ' ')
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!cleaned) return [];
+      return cleaned.split(' ').filter(function(t) { return t.length > 0; });
+    }
+
+    function calcStringSimilarity(a, b) {
+      if (!a || !b) return 0;
+      if (a === b) return 1;
+      const lenA = a.length;
+      const lenB = b.length;
+      const maxLen = Math.max(lenA, lenB);
+      const dp = [];
+      for (let i = 0; i <= lenA; i++) dp[i] = [i];
+      for (let j = 0; j <= lenB; j++) dp[0][j] = j;
+      for (let i = 1; i <= lenA; i++) {
+        for (let j = 1; j <= lenB; j++) {
+          const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+          dp[i][j] = Math.min(dp[i - 1][j] + 1, dp[i][j - 1] + 1, dp[i - 1][j - 1] + cost);
+        }
+      }
+      return (maxLen - dp[lenA][lenB]) / maxLen;
+    }
+
+    function analyzeNameMatch(rawNameA, rawNameB) {
+      const tokensA = cleanNameTokens(rawNameA);
+      const tokensB = cleanNameTokens(rawNameB);
+      if (tokensA.length === 0 || tokensB.length === 0) {
+        return { level: 'NONE', label: '' };
+      }
+
+      const origA = tokensA.join(' ');
+      const origB = tokensB.join(' ');
+      if (origA.length >= 3 && origA === origB) {
+        return { level: 'EXACT', label: 'Nama Sama' };
+      }
+
+      const sortedA = tokensA.slice().sort().join(' ');
+      const sortedB = tokensB.slice().sort().join(' ');
+      if (sortedA.length >= 3 && sortedA === sortedB) {
+        return { level: 'REORDERED_EXACT', label: 'Nama Terbalik (Sama)' };
+      }
+
+      const sortedSim = calcStringSimilarity(sortedA, sortedB);
+      if (sortedSim >= 0.85) {
+        const isReordered = origA !== sortedA || origB !== sortedB;
+        return {
+          level: 'SIMILAR',
+          label: isReordered ? 'Nama Terbalik / Mirip' : 'Nama Mirip'
+        };
+      }
+
+      const shorter = tokensA.length <= tokensB.length ? tokensA : tokensB;
+      const longer = tokensA.length <= tokensB.length ? tokensB : tokensA;
+      const usedLonger = {};
+      let matchedCount = 0;
+      let strongMatchedCount = 0;
+
+      for (let i = 0; i < shorter.length; i++) {
+        const tS = shorter[i];
+        let bestIdx = -1;
+        let bestScore = 0;
+
+        for (let j = 0; j < longer.length; j++) {
+          if (usedLonger[j]) continue;
+          const tL = longer[j];
+          let score = 0;
+
+          if (tS === tL) {
+            score = 1.0;
+          } else if (tS.length >= 4 && tL.length >= 4) {
+            const wSim = calcStringSimilarity(tS, tL);
+            if (wSim >= 0.80) score = wSim;
+          } else if ((tS.length === 1 && tL.indexOf(tS) === 0) || (tL.length === 1 && tS.indexOf(tL) === 0)) {
+            score = 0.75;
+          }
+
+          if (score > bestScore) {
+            bestScore = score;
+            bestIdx = j;
+          }
+        }
+
+        if (bestIdx !== -1) {
+          usedLonger[bestIdx] = true;
+          matchedCount++;
+          if (tS.length >= 3 && longer[bestIdx].length >= 3) {
+            strongMatchedCount++;
+          }
+        }
+      }
+
+      if (shorter.length >= 2 && matchedCount === shorter.length && strongMatchedCount >= 1) {
+        return { level: 'SUBSET_REORDERED', label: 'Nama Cocok (Urutan / Singkatan)' };
+      }
+
+      if (strongMatchedCount >= 1 && matchedCount / shorter.length >= 0.5) {
+        return { level: 'PARTIAL_TOKEN', label: 'Sebagian Nama Cocok' };
+      }
+
+      if (sortedSim >= 0.72) {
+        return { level: 'WEAK_SIMILAR', label: 'Nama Mirip' };
+      }
+
+      return { level: 'NONE', label: '' };
+    }
+
+    function extractPhones(val) {
+      const rawMatches = String(val || '').match(/\d{7,15}/g) || [];
+      const phones = [];
+      rawMatches.forEach(function(num) {
+        let norm = num;
+        if (norm.indexOf('62') === 0) norm = norm.substring(2);
+        if (norm.indexOf('0') === 0) norm = norm.substring(1);
+        if (norm.length >= 7 && phones.indexOf(norm) === -1) phones.push(norm);
+      });
+      return phones;
+    }
+
+    function extractUnitInfo(val) {
+      const upper = String(val || '').toUpperCase();
+      const fullUnits = [];
+      const unitNumbers = [];
+
+      function addFullUnit(block, num) {
+        const cleanNum = String(Number(num)) !== 'NaN' ? String(Number(num)) : num;
+        const code = block + '-' + cleanNum;
+        if (fullUnits.indexOf(code) === -1) fullUnits.push(code);
+        if (unitNumbers.indexOf(cleanNum) === -1) unitNumbers.push(cleanNum);
+      }
+
+      const blockRegex = /([A-Z]{1,4})[\s\-\.]*(\d{1,3}[A-Z]?)[\s\-\.]*(?:NO\.?|NOMOR|NUMBER)?[\s\-\.]*(\d{1,4})((?:\s*(?:&|,|;|DAN|\/|\n|\r)\s*\d{1,4})*)/g;
+      let m;
+      while ((m = blockRegex.exec(upper)) !== null) {
+        const block = m[1] + m[2];
+        addFullUnit(block, m[3]);
+        if (m[4]) {
+          const extraNums = m[4].match(/\d{1,4}/g) || [];
+          extraNums.forEach(function(en) {
+            addFullUnit(block, en);
+          });
+        }
+      }
+
+      if (fullUnits.length === 0) {
+        const fallback = upper.replace(/[^A-Z0-9]/g, '');
+        if (fallback.length >= 4) fullUnits.push(fallback);
+
+        const numMatches = upper.match(/\d{1,4}/g) || [];
+        numMatches.forEach(function(nm) {
+          const cleanNum = String(Number(nm));
+          if (unitNumbers.indexOf(cleanNum) === -1) unitNumbers.push(cleanNum);
+        });
+      }
+
+      return {
+        fullUnits: fullUnits,
+        unitNumbers: unitNumbers
+      };
+    }
+
+    function evaluateCandidateMatch(inputObj, existingRec) {
+      const nameRes = analyzeNameMatch(inputObj.nama, existingRec.nama);
+
+      const phonesA = extractPhones(inputObj.telp);
+      const phonesB = extractPhones(existingRec.telp);
+      const sharedPhone = phonesA.some(function(p) { return phonesB.indexOf(p) !== -1; });
+
+      const unitA = extractUnitInfo(inputObj.unit);
+      const unitB = extractUnitInfo(existingRec.unit);
+      const sharedFullUnit = unitA.fullUnits.some(function(u) { return unitB.fullUnits.indexOf(u) !== -1; });
+      const sharedUnitNumber = !sharedFullUnit && unitA.unitNumbers.some(function(n) { return unitB.unitNumbers.indexOf(n) !== -1; });
+
+      const reasons = [];
+      if (nameRes.label) reasons.push(nameRes.label);
+      if (sharedFullUnit) reasons.push('Unit & No. Unit Sama');
+      else if (sharedUnitNumber) reasons.push('No. Unit Sama');
+      if (sharedPhone) reasons.push('No. Telp Sama');
+
+      const isStrongName =
+        nameRes.level === 'EXACT' ||
+        nameRes.level === 'REORDERED_EXACT' ||
+        nameRes.level === 'SIMILAR' ||
+        nameRes.level === 'SUBSET_REORDERED';
+
+      const isSupportingName =
+        nameRes.level === 'PARTIAL_TOKEN' ||
+        nameRes.level === 'WEAK_SIMILAR';
+
+      const isSamePerson =
+        isStrongName ||
+        (isSupportingName && (sharedFullUnit || sharedUnitNumber || sharedPhone)) ||
+        (sharedFullUnit && sharedPhone);
+
+      const isPartialSimilar =
+        !isSamePerson &&
+        (sharedFullUnit || sharedPhone || isSupportingName);
+
+      return {
+        matched: isSamePerson || isPartialSimilar,
+        isSamePerson: isSamePerson,
+        reasons: reasons
+      };
+    }
+
+    function checkSimilarityLive(prefix) {
+      const nama = document.getElementById(prefix + 'Nama').value;
+      const telp = document.getElementById(prefix + 'Telp').value;
+      const unit = document.getElementById(prefix + 'Unit').value;
+      const excludeId = prefix === 'edit' ? document.getElementById('editRecordId').value : '';
+      const alertBox = document.getElementById(prefix + 'SimilarityAlert');
+
+      const hasName = cleanNameTokens(nama).length > 0;
+      const hasPhone = extractPhones(telp).length > 0;
+      const uInfo = extractUnitInfo(unit);
+      const hasUnit = uInfo.fullUnits.length > 0 || uInfo.unitNumbers.length > 0;
+
+      if (!hasName && !hasPhone && !hasUnit) {
+        alertBox.classList.add('hidden');
+        return;
+      }
+
+      const matches = [];
+      appData.records.forEach(function(rec) {
+        if (excludeId && rec.id === excludeId) return;
+        const res = evaluateCandidateMatch({ nama: nama, telp: telp, unit: unit }, rec);
+        if (res.matched) {
+          matches.push({ rec: rec, isSamePerson: res.isSamePerson, reasons: res.reasons });
+        }
+      });
+
+      if (matches.length === 0) {
+        alertBox.classList.add('hidden');
+        return;
+      }
+
+      const hasSamePerson = matches.some(function(m) { return m.isSamePerson; });
+      alertBox.className = hasSamePerson
+        ? 'p-3.5 rounded-xl border border-purple-300 bg-purple-50 text-xs space-y-2'
+        : 'p-3.5 rounded-xl border border-amber-300 bg-amber-50 text-xs space-y-2';
+
+      const title = hasSamePerson
+        ? 'Notifikasi Pengenalan Identitas: Terdeteksi orang yang sama di data sebelumnya (' + matches.length + ' record):'
+        : 'Notifikasi Kemiripan Sebagian (Unit / No. Telp / Sebagian Nama mirip):';
+
+      alertBox.innerHTML =
+        '<p class="font-bold ' + (hasSamePerson ? 'text-purple-900' : 'text-amber-900') + '">' + title + '</p>' +
+        matches.slice(0, 5).map(function(m) {
+          const r = m.rec;
+          const tags = m.reasons.map(function(rs) {
+            return '<span class="inline-block px-1.5 py-0.5 rounded bg-purple-200/80 text-purple-900 font-semibold text-[10px]">' + escapeHtml(rs) + '</span>';
+          }).join(' ');
+
+          const unitPreview = r.unit && r.unit.length > 70 ? r.unit.substring(0, 70) + '...' : (r.unit || '-');
+          const copyBtn = prefix === 'in'
+            ? '<button type="button" onclick="autoFillFromRecord(\'' + escapeHtml(r.id) + '\')" class="mt-1.5 px-2.5 py-1 rounded bg-purple-700 text-white font-semibold text-[11px] active:bg-purple-800">Salin Telp, Unit &amp; Dokumen</button>'
+            : '';
+
+          return (
+            '<div class="bg-white p-2.5 rounded-lg border border-slate-200 text-slate-700 space-y-1">' +
+              '<div class="flex flex-wrap items-center justify-between gap-1">' +
+                '<span class="font-bold text-slate-900">' + escapeHtml(r.batch) + ' • ' + escapeHtml(r.nama) + '</span>' +
+                '<div class="flex flex-wrap gap-1">' + tags + '</div>' +
+              '</div>' +
+              '<p>Unit: <strong>' + escapeHtml(unitPreview) + '</strong> • Telp: <strong>' + escapeHtml(r.telp || '-') + '</strong></p>' +
+              '<p class="text-[11px] text-slate-500">Tgl: ' + escapeHtml(r.tanggal || '-') + ' • Skema: ' + escapeHtml(r.skema || '-') + (r.isu ? ' (' + escapeHtml(r.isu) + ')' : '') + '</p>' +
+              copyBtn +
+            '</div>'
+          );
+        }).join('');
+
+      alertBox.classList.remove('hidden');
+    }
+
+    function autoFillFromRecord(recordId) {
+      const rec = appData.records.find(function(item) { return item.id === recordId; });
+      if (!rec) return;
+      if (!document.getElementById('inTelp').value && rec.telp) {
+        document.getElementById('inTelp').value = rec.telp;
+      }
+      if (!document.getElementById('inUnit').value && rec.unit) {
+        document.getElementById('inUnit').value = rec.unit;
+      }
+      if (!document.getElementById('inJumlahUnit').value && rec.jumlahUnit) {
+        document.getElementById('inJumlahUnit').value = rec.jumlahUnit;
+      }
+      if (!document.getElementById('inDokumen').value && rec.dokumen) {
+        document.getElementById('inDokumen').value = rec.dokumen;
+      }
+      handleUnitInput('in');
+    }
+
+    function showGlobalNotification(savedRecordId, insertedRowCount) {
+      if (!savedRecordId) return;
+      const rec = appData.records.find(function(item) { return item.id === savedRecordId; });
+      if (!rec) return;
+
+      const box = document.getElementById('globalNotification');
+      const body = document.getElementById('globalNotificationBody');
+      const extraRowInfo = insertedRowCount && insertedRowCount > 1
+        ? ' (' + insertedRowCount + ' baris unit dibuat terpisah)'
+        : '';
+
+      if (rec.isRepeat) {
+        box.className = 'p-3.5 rounded-xl border border-purple-300 bg-purple-50 shadow-sm flex items-start justify-between gap-3';
+        body.innerHTML =
+          '<p class="font-bold text-purple-900">Notifikasi Pengenalan Identitas (' + escapeHtml(rec.matchReasons.join(', ')) + ')</p>' +
+          '<p class="text-purple-800"><strong>' + escapeHtml(rec.nama) + '</strong>' + extraRowInfo + ' dikenali sebagai orang yang sama, tercatat <strong>' + rec.visitCount + 'x</strong> (' + escapeHtml(rec.repeatBatches) + ') dan tetap dihitung sebagai <strong>1 orang</strong>.</p>' +
+          '<button onclick="openDetail(\'' + escapeHtml(rec.id) + '\')" class="mt-1 inline-block px-3 py-1 rounded-lg bg-purple-700 text-white text-xs font-bold">Lihat Riwayat Gabungan</button>';
+      } else {
+        box.className = 'p-3.5 rounded-xl border border-emerald-300 bg-emerald-50 shadow-sm flex items-start justify-between gap-3';
+        body.innerHTML =
+          '<p class="font-bold text-emerald-900">Data Berhasil Disimpan' + extraRowInfo + '</p>' +
+          '<p class="text-emerald-800"><strong>' + escapeHtml(rec.nama) + '</strong> (' + escapeHtml(rec.batch) + ') telah ditambahkan sebagai orang baru.</p>';
+      }
+      box.classList.remove('hidden');
+    }
+
+    function hideGlobalNotification() {
+      document.getElementById('globalNotification').classList.add('hidden');
+    }
+
+    function getTodayDateString() {
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      return year + '-' + month + '-' + day;
+    }
+
+    function setTanggalHariIni(inputId) {
+      document.getElementById(inputId).value = getTodayDateString();
+    }
+
+    function openInputModal() {
+      setTanggalHariIni('inTanggal');
+      document.getElementById('inSimilarityAlert').classList.add('hidden');
+      document.getElementById('inDetectedUnitBadge').classList.add('hidden');
+      document.getElementById('inSplitOptionBox').classList.add('hidden');
+      document.getElementById('inSplitPerUnit').checked = false;
+      openModal('modalInput');
+    }
+
+    function openEditModal(recordId) {
+      const rec = appData.records.find(function(item) { return item.id === recordId; });
+      if (!rec) return;
+
+      document.getElementById('editRecordId').value = rec.id;
+      document.getElementById('editBatch').value = rec.batch;
+      document.getElementById('editRowNumber').value = rec.rowNumber;
+      document.getElementById('editSubtitle').textContent = rec.batch + ' • No. ' + (rec.no || '-');
+      document.getElementById('editLocationDisplay').value = rec.batch + ' (Baris ' + rec.rowNumber + ')';
+      document.getElementById('editIsBaru').value = rec.isBaru ? 'true' : 'false';
+      document.getElementById('editNama').value = rec.nama || '';
+      document.getElementById('editTelp').value = rec.telp || '';
+      document.getElementById('editUnit').value = rec.unit || '';
+      document.getElementById('editJumlahUnit').value = rec.jumlahUnit || '';
+      document.getElementById('editTanggal').value = rec.tanggalIso || '';
+      document.getElementById('editSkema').value = rec.skema || '';
+      document.getElementById('editStatusData').value = rec.statusData || '';
+      document.getElementById('editJenisKunjungan').value = rec.jenisKunjungan || '';
+      document.getElementById('editDokumen').value = rec.dokumen || '';
+      document.getElementById('editIsu').value = rec.isu || '';
+
+      closeModal('modalDetail');
+      openModal('modalEdit');
+      handleUnitInput('edit');
+      if (rec.jumlahUnit) {
+        document.getElementById('editJumlahUnit').value = rec.jumlahUnit;
+      }
+    }
+
+    function showLoading(show) {
+      document.getElementById('loadingOverlay').classList.toggle('hidden', !show);
+    }
+
+    function openModal(id) {
+      document.getElementById(id).classList.remove('hidden');
+    }
+
+    function closeModal(id) {
+      document.getElementById(id).classList.add('hidden');
+    }
+
+    function escapeHtml(str) {
+      return String(str || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function loadData() {
+      showLoading(true);
+      google.script.run
+        .withSuccessHandler(function(res) {
+          appData = res;
+          updateUI();
+          showLoading(false);
+        })
+        .withFailureHandler(function(err) {
+          showLoading(false);
+          alert('Gagal memuat data: ' + err.message);
+        })
+        .getInitialData();
+    }
+
+    function updateUI() {
+      document.getElementById('statUniquePersons').textContent = appData.summary.totalUniquePersons || 0;
+      document.getElementById('statTotalRowsSub').textContent = 'dari ' + (appData.summary.totalPemilik || 0) + ' baris data';
+      document.getElementById('statTotalUnit').textContent = appData.summary.totalUnit || 0;
+      document.getElementById('statTotalBaru').textContent = appData.summary.totalBaru || 0;
+      document.getElementById('statTotalRepeat').textContent = appData.summary.totalUniqueRepeat || 0;
+
+      const filterBatch = document.getElementById('filterBatch');
+      const currentFilter = filterBatch.value;
+      filterBatch.innerHTML = '<option value="ALL">Semua Batch</option>';
+      appData.batches.forEach(function(b) {
+        const opt = document.createElement('option');
+        opt.value = b;
+        opt.textContent = b;
+        filterBatch.appendChild(opt);
+      });
+      if (appData.batches.indexOf(currentFilter) !== -1) {
+        filterBatch.value = currentFilter;
+      }
+
+      const inBatch = document.getElementById('inBatch');
+      inBatch.innerHTML = '';
+      appData.batches.forEach(function(b) {
+        const opt = document.createElement('option');
+        opt.value = b;
+        opt.textContent = b;
+        inBatch.appendChild(opt);
+      });
+      if (appData.batches.length > 0) {
+        inBatch.value = appData.batches[appData.batches.length - 1];
+      }
+
+      renderTable();
+    }
+
+    function renderTable() {
+      const q = document.getElementById('searchInput').value.toLowerCase().trim();
+      const batchFilter = document.getElementById('filterBatch').value;
+      const statusFilter = document.getElementById('filterStatus').value;
+
+      const filtered = appData.records.filter(function(r) {
+        const matchBatch = batchFilter === 'ALL' || r.batch === batchFilter;
+        const matchStatus =
+          statusFilter === 'ALL' ||
+          (statusFilter === 'REPEAT' && r.isRepeat) ||
+          (statusFilter === 'BARU' && r.isBaru) ||
+          (statusFilter === 'LAMA' && !r.isBaru);
+        const matchQuery =
+          !q ||
+          r.nama.toLowerCase().indexOf(q) !== -1 ||
+          r.unit.toLowerCase().indexOf(q) !== -1 ||
+          r.telp.toLowerCase().indexOf(q) !== -1;
+        return matchBatch && matchStatus && matchQuery;
+      });
+
+      document.getElementById('tableCountInfo').textContent =
+        'Menampilkan ' + filtered.length + ' baris dari ' + appData.records.length + ' total baris';
+
+      const mobileList = document.getElementById('mobileList');
+      const tbody = document.getElementById('tableBody');
+
+      if (filtered.length === 0) {
+        mobileList.innerHTML = '<div class="bg-white p-6 rounded-xl border border-slate-200 text-center text-sm text-slate-400">Tidak ada data yang cocok.</div>';
+        tbody.innerHTML = '<tr><td colspan="9" class="py-8 text-center text-slate-400">Tidak ada data yang cocok dengan pencarian.</td></tr>';
+        return;
+      }
+
+      // Render Kartu Khusus HP (ringkas jika unit berjumlah puluhan/ratusan)
+      mobileList.innerHTML = filtered.map(function(r) {
+        const statusBadge = r.isBaru
+          ? '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-amber-200 text-amber-900">Baru</span>'
+          : '<span class="px-2 py-0.5 rounded-full text-[11px] font-medium bg-slate-200 text-slate-700">Lama</span>';
+
+        const repeatBadge = r.isRepeat
+          ? '<span class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800 border border-purple-300">' + escapeHtml(r.personCode) + ' (' + r.visitCount + 'x)</span>'
+          : '';
+
+        const shortUnit = r.unit && r.unit.length > 85
+          ? r.unit.substring(0, 85) + '... (klik Detail untuk semua)'
+          : (r.unit || 'Unit belum diisi');
+
+        const cardBorder = r.isBaru ? 'border-amber-300 bg-amber-50/40' : 'border-slate-200 bg-white';
+
+        return (
+          '<div class="' + cardBorder + ' rounded-xl border p-3.5 shadow-sm space-y-2.5">' +
+            '<div class="flex items-center justify-between gap-2">' +
+              '<span class="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded">' + escapeHtml(r.batch) + ' • #' + escapeHtml(r.no) + '</span>' +
+              '<div class="flex items-center gap-1">' + repeatBadge + statusBadge + '</div>' +
+            '</div>' +
+            '<div>' +
+              '<h3 class="font-bold text-base text-slate-900 leading-snug">' + escapeHtml(r.nama) + '</h3>' +
+              '<p class="text-xs text-slate-600 mt-0.5">' + escapeHtml(shortUnit) + (r.jumlahUnit ? ' • <strong>' + escapeHtml(r.jumlahUnit) + ' Unit</strong>' : '') + '</p>' +
+              (r.isRepeat ? '<p class="text-[11px] font-medium text-purple-700 mt-1">Cocok (' + escapeHtml(r.matchReasons.join(', ')) + ') di: ' + escapeHtml(r.repeatBatches) + '</p>' : '') +
+            '</div>' +
+            '<div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 pt-0.5">' +
+              '<span>Skema: <strong class="text-slate-700">' + escapeHtml(r.skema || '-') + '</strong></span>' +
+              '<span>•</span>' +
+              '<span>Tgl: ' + escapeHtml(r.tanggal || '-') + '</span>' +
+            '</div>' +
+            '<div class="grid grid-cols-3 gap-1.5 pt-1.5 border-t border-slate-200/80">' +
+              '<button onclick="toggleRowStatus(\'' + escapeHtml(r.id) + '\')" class="py-2 px-2 text-xs font-semibold rounded-lg border border-slate-300 bg-white active:bg-slate-100 text-slate-700">' +
+                (r.isBaru ? 'Set Lama' : 'Set Baru') +
+              '</button>' +
+              '<button onclick="openEditModal(\'' + escapeHtml(r.id) + '\')" class="py-2 px-2 text-xs font-semibold rounded-lg border border-blue-300 bg-blue-50 active:bg-blue-100 text-blue-800">' +
+                'Edit' +
+              '</button>' +
+              '<button onclick="openDetail(\'' + escapeHtml(r.id) + '\')" class="py-2 px-2 text-xs font-bold rounded-lg bg-slate-800 active:bg-slate-700 text-white">' +
+                'Detail' +
+              '</button>' +
+            '</div>' +
+          '</div>'
+        );
+      }).join('');
+
+      // Render Tabel Khusus Desktop
+      tbody.innerHTML = filtered.map(function(r) {
+        const badge = r.isBaru
+          ? '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold bg-amber-200 text-amber-900">Baru</span>'
+          : '<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-200 text-slate-700">Lama</span>';
+
+        const repeatPill = r.isRepeat
+          ? '<span class="ml-1.5 inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-bold bg-purple-100 text-purple-800 border border-purple-300" title="' + escapeHtml(r.personCode + ' • Cocok: ' + r.matchReasons.join(', ') + ' (' + r.repeatBatches + ')') + '">' + escapeHtml(r.personCode) + ' • ' + r.visitCount + 'x</span>'
+          : '';
+
+        const rowBg = r.isBaru ? 'bg-amber-50/50 hover:bg-amber-50' : 'hover:bg-slate-50';
+
+        return (
+          '<tr class="' + rowBg + ' transition">' +
+            '<td class="py-3 px-4 whitespace-nowrap text-xs font-medium text-slate-500">' + escapeHtml(r.batch) + '</td>' +
+            '<td class="py-3 px-3 text-slate-500">' + escapeHtml(r.no) + '</td>' +
+            '<td class="py-3 px-4 font-semibold text-slate-900">' + escapeHtml(r.nama) + repeatPill + '</td>' +
+            '<td class="py-3 px-4 text-slate-700 max-w-xs truncate" title="' + escapeHtml(r.unit) + '">' + escapeHtml(r.unit || '-') + '</td>' +
+            '<td class="py-3 px-3 text-center font-bold text-slate-800">' + escapeHtml(r.jumlahUnit || '-') + '</td>' +
+            '<td class="py-3 px-4 whitespace-nowrap text-slate-600 text-xs">' + escapeHtml(r.tanggal || '-') + '</td>' +
+            '<td class="py-3 px-4 text-slate-700">' + escapeHtml(r.skema || '-') + '</td>' +
+            '<td class="py-3 px-4">' + badge + '</td>' +
+            '<td class="py-3 px-4 text-right whitespace-nowrap space-x-1">' +
+              '<button onclick="toggleRowStatus(\'' + escapeHtml(r.id) + '\')" class="px-2.5 py-1 text-xs font-medium rounded border border-slate-300 hover:bg-slate-100">' +
+                (r.isBaru ? 'Set Lama' : 'Tandai Baru') +
+              '</button>' +
+              '<button onclick="openEditModal(\'' + escapeHtml(r.id) + '\')" class="px-2.5 py-1 text-xs font-semibold rounded border border-blue-300 bg-blue-50 text-blue-800 hover:bg-blue-100">' +
+                'Edit' +
+              '</button>' +
+              '<button onclick="openDetail(\'' + escapeHtml(r.id) + '\')" class="px-2.5 py-1 text-xs font-semibold rounded bg-slate-800 text-white hover:bg-slate-700">' +
+                'Detail' +
+              '</button>' +
+            '</td>' +
+          '</tr>'
+        );
+      }).join('');
+    }
+
+    function openDetail(recordId) {
+      const rec = appData.records.find(function(item) { return item.id === recordId; });
+      if (!rec) return;
+      activeDetailRecord = rec;
+
+      document.getElementById('detBatchBadge').textContent = rec.batch;
+      document.getElementById('detNama').textContent = rec.nama;
+      document.getElementById('detNo').textContent = rec.no || '-';
+      document.getElementById('detTelp').textContent = rec.telp || '-';
+      document.getElementById('detUnit').textContent = rec.unit || '-';
+      document.getElementById('detJumlahUnit').textContent = rec.jumlahUnit || '-';
+      document.getElementById('detTanggal').textContent = rec.tanggal || '-';
+      document.getElementById('detSkema').textContent = rec.skema || '-';
+      document.getElementById('detStatusData').textContent = rec.statusData || '-';
+      document.getElementById('detJenisKunjungan').textContent = rec.jenisKunjungan || '-';
+      document.getElementById('detDokumen').textContent = rec.dokumen || '-';
+      document.getElementById('detIsu').textContent = rec.isu || '-';
+
+      const repeatBadge = document.getElementById('detRepeatBadge');
+      const historySection = document.getElementById('detHistorySection');
+      const historyList = document.getElementById('detHistoryList');
+
+      if (rec.isRepeat && rec.history) {
+        repeatBadge.textContent = rec.personCode + ' • ' + rec.visitCount + 'x Tercatat';
+        repeatBadge.classList.remove('hidden');
+        historySection.classList.remove('hidden');
+        document.getElementById('detHistoryTitle').textContent =
+          'Riwayat Gabungan 1 Orang (' + rec.visitCount + 'x Tercatat)';
+        document.getElementById('detMatchReasonText').textContent =
+          'Kriteria kecocokan: ' + (rec.matchReasons && rec.matchReasons.length ? rec.matchReasons.join(', ') : 'Kombinasi Data');
+
+        historyList.innerHTML = rec.history.map(function(h) {
+          const isCurrent = h.id === rec.id;
+          const hUnitShort = h.unit && h.unit.length > 75 ? h.unit.substring(0, 75) + '...' : (h.unit || '-');
+          return (
+            '<div onclick="openDetail(\'' + escapeHtml(h.id) + '\')" class="cursor-pointer p-2.5 rounded-lg border text-xs transition ' +
+              (isCurrent ? 'bg-purple-100/80 border-purple-400' : 'bg-white border-purple-200 hover:bg-purple-50') + '">' +
+              '<div class="flex items-center justify-between gap-2">' +
+                '<span class="font-bold text-purple-900">' + escapeHtml(h.batch) + ' (#' + escapeHtml(h.no) + ')' + (isCurrent ? ' • Sedang Dibuka' : '') + '</span>' +
+                '<span class="text-slate-500">' + escapeHtml(h.tanggal || '-') + '</span>' +
+              '</div>' +
+              '<p class="text-slate-700 mt-1">Skema: <strong>' + escapeHtml(h.skema || '-') + '</strong>' + (h.jumlahUnit ? ' • <strong>' + escapeHtml(h.jumlahUnit) + ' Unit</strong>' : '') + (h.isu ? ' • Syarat: ' + escapeHtml(h.isu) : '') + '</p>' +
+              '<p class="text-[11px] text-slate-500 mt-0.5">' + escapeHtml(h.nama) + ' • Unit: ' + escapeHtml(hUnitShort) + '</p>' +
+            '</div>'
+          );
+        }).join('');
+      } else {
+        repeatBadge.classList.add('hidden');
+        historySection.classList.add('hidden');
+      }
+
+      document.getElementById('btnDetailEdit').onclick = function() {
+        openEditModal(rec.id);
+      };
+
+      const banner = document.getElementById('detStatusBanner');
+      if (rec.isBaru) {
+        banner.className = 'p-3.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border border-amber-300 bg-amber-50';
+        banner.innerHTML =
+          '<div><p class="text-xs font-bold text-amber-900">Status: DATA BARU (Pengkinian Data)</p><p class="text-xs text-amber-700">Terhitung di kolom Pemilik yang baru pengkinian data.</p></div>' +
+          '<button onclick="toggleDetailStatus(false)" class="px-3.5 py-2 text-xs font-bold bg-white border border-amber-400 text-amber-900 rounded-lg active:bg-amber-100 shrink-0">Ubah ke Lama</button>';
+      } else {
+        banner.className = 'p-3.5 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border border-slate-200 bg-slate-100';
+        banner.innerHTML =
+          '<div><p class="text-xs font-bold text-slate-800">Status: DATA LAMA</p><p class="text-xs text-slate-600">Belum ditandai sebagai pengkinian data baru.</p></div>' +
+          '<button onclick="toggleDetailStatus(true)" class="px-3.5 py-2 text-xs font-bold bg-amber-400 text-slate-900 rounded-lg active:bg-amber-300 shrink-0">Tandai Data Baru</button>';
+      }
+
+      openModal('modalDetail');
+    }
+
+    function toggleDetailStatus(newIsBaru) {
+      if (!activeDetailRecord) return;
+      executeToggle(activeDetailRecord.batch, activeDetailRecord.rowNumber, newIsBaru, true);
+    }
+
+    function toggleRowStatus(recordId) {
+      const rec = appData.records.find(function(item) { return item.id === recordId; });
+      if (!rec) return;
+      executeToggle(rec.batch, rec.rowNumber, !rec.isBaru, false);
+    }
+
+    function executeToggle(batch, rowNumber, isBaru, refreshDetail) {
+      showLoading(true);
+      google.script.run
+        .withSuccessHandler(function(res) {
+          appData = res;
+          updateUI();
+          if (refreshDetail && activeDetailRecord) {
+            openDetail(activeDetailRecord.id);
+          }
+          showLoading(false);
+        })
+        .withFailureHandler(function(err) {
+          showLoading(false);
+          alert('Gagal mengubah status: ' + err.message);
+        })
+        .toggleStatusData(batch, rowNumber, isBaru);
+    }
+
+    function submitInputForm(e) {
+      e.preventDefault();
+      const rawUnit = document.getElementById('inUnit').value;
+      const unitList = parseIndividualUnits(rawUnit);
+      const splitPerUnit = document.getElementById('inSplitPerUnit').checked && unitList.length > 1;
+
+      const payload = {
+        batch: document.getElementById('inBatch').value,
+        isBaru: document.getElementById('inIsBaru').value === 'true',
+        nama: document.getElementById('inNama').value,
+        telp: document.getElementById('inTelp').value,
+        unit: rawUnit,
+        unitList: unitList,
+        splitPerUnit: splitPerUnit,
+        jumlahUnit: document.getElementById('inJumlahUnit').value,
+        tanggal: document.getElementById('inTanggal').value,
+        skema: document.getElementById('inSkema').value,
+        statusData: document.getElementById('inStatusData').value,
+        jenisKunjungan: document.getElementById('inJenisKunjungan').value,
+        dokumen: document.getElementById('inDokumen').value,
+        isu: document.getElementById('inIsu').value
+      };
+
+      showLoading(true);
+      google.script.run
+        .withSuccessHandler(function(res) {
+          appData = res;
+          updateUI();
+          document.getElementById('formInput').reset();
+          document.getElementById('inSimilarityAlert').classList.add('hidden');
+          document.getElementById('inDetectedUnitBadge').classList.add('hidden');
+          document.getElementById('inSplitOptionBox').classList.add('hidden');
+          setTanggalHariIni('inTanggal');
+          closeModal('modalInput');
+          showGlobalNotification(res.lastSavedId, res.insertedRowCount);
+          showLoading(false);
+        })
+        .withFailureHandler(function(err) {
+          showLoading(false);
+          alert('Gagal menyimpan data: ' + err.message);
+        })
+        .tambahDataPemilik(payload);
+    }
+
+    function submitEditForm(e) {
+      e.preventDefault();
+      const payload = {
+        batch: document.getElementById('editBatch').value,
+        rowNumber: document.getElementById('editRowNumber').value,
+        isBaru: document.getElementById('editIsBaru').value === 'true',
+        nama: document.getElementById('editNama').value,
+        telp: document.getElementById('editTelp').value,
+        unit: document.getElementById('editUnit').value,
+        jumlahUnit: document.getElementById('editJumlahUnit').value,
+        tanggal: document.getElementById('editTanggal').value,
+        skema: document.getElementById('editSkema').value,
+        statusData: document.getElementById('editStatusData').value,
+        jenisKunjungan: document.getElementById('editJenisKunjungan').value,
+        dokumen: document.getElementById('editDokumen').value,
+        isu: document.getElementById('editIsu').value
+      };
+
+      showLoading(true);
+      google.script.run
+        .withSuccessHandler(function(res) {
+          appData = res;
+          updateUI();
+          closeModal('modalEdit');
+          showGlobalNotification(res.lastSavedId, res.insertedRowCount);
+          showLoading(false);
+        })
+        .withFailureHandler(function(err) {
+          showLoading(false);
+          alert('Gagal menyimpan perubahan: ' + err.message);
+        })
+        .editDataPemilik(payload);
+    }
+
+    function submitBatchForm(e) {
+      e.preventDefault();
+      const namaBatch = document.getElementById('newBatchName').value;
+      showLoading(true);
+      google.script.run
+        .withSuccessHandler(function(res) {
+          appData = res;
+          updateUI();
+          document.getElementById('newBatchName').value = '';
+          closeModal('modalBatch');
+          showLoading(false);
+        })
+        .withFailureHandler(function(err) {
+          showLoading(false);
+          alert('Gagal membuat Batch: ' + err.message);
+        })
+        .buatBatchBaru(namaBatch);
+    }
+  </script>
+</body>
+</html>
